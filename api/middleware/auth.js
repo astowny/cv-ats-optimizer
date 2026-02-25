@@ -1,7 +1,12 @@
-﻿const jwt = require("jsonwebtoken");
+const jwt = require("jsonwebtoken");
 
-const JWT_SECRET = process.env.JWT_SECRET || "change-me-in-production-use-a-long-random-string";
+if (!process.env.JWT_SECRET) {
+  throw new Error("JWT_SECRET environment variable is required. Set it in your .env file.");
+}
+
+const JWT_SECRET = process.env.JWT_SECRET;
 const JWT_EXPIRES_IN = "7d";
+const COOKIE_NAME = "auth_token";
 
 function generateToken(user) {
   return jwt.sign(
@@ -11,12 +16,26 @@ function generateToken(user) {
   );
 }
 
+const COOKIE_OPTIONS = {
+  httpOnly: true,
+  secure: process.env.NODE_ENV === "production",
+  sameSite: "strict",
+  maxAge: 7 * 24 * 60 * 60 * 1000 // 7 jours en ms
+};
+
+function setAuthCookie(res, token) {
+  res.cookie(COOKIE_NAME, token, COOKIE_OPTIONS);
+}
+
+function clearAuthCookie(res) {
+  res.clearCookie(COOKIE_NAME, { httpOnly: true, secure: COOKIE_OPTIONS.secure, sameSite: "strict" });
+}
+
 function verifyJwt(req, res, next) {
-  const authHeader = req.headers.authorization;
-  if (!authHeader || !authHeader.startsWith("Bearer ")) {
-    return res.status(401).json({ error: "Authorization header required. Format: Bearer <token>" });
+  const token = req.cookies?.[COOKIE_NAME];
+  if (!token) {
+    return res.status(401).json({ error: "Authentication required. Please login." });
   }
-  const token = authHeader.substring(7);
   try {
     const decoded = jwt.verify(token, JWT_SECRET);
     req.user = decoded;
@@ -26,4 +45,4 @@ function verifyJwt(req, res, next) {
   }
 }
 
-module.exports = { generateToken, verifyJwt, JWT_SECRET };
+module.exports = { generateToken, setAuthCookie, clearAuthCookie, verifyJwt };

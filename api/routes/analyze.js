@@ -19,23 +19,18 @@ const upload = multer({
 
 async function flexAuth(req, res, next) {
   const authHeader = req.headers.authorization;
-  if (!authHeader || !authHeader.startsWith("Bearer ")) {
-    return res.status(401).json({ error: "Authorization required. Use: Bearer <jwt_token> or Bearer <sk-ats-...>" });
-  }
-  const token = authHeader.substring(7);
-  if (token.startsWith("sk-ats-")) {
+  // Les API keys passent toujours par l'en-tête Authorization
+  if (authHeader && authHeader.startsWith("Bearer sk-ats-")) {
     return apiKeyAuth(req, res, next);
   }
+  // Les utilisateurs web utilisent le cookie httpOnly
   return verifyJwt(req, res, next);
 }
 
 async function incrementUsage(req) {
-  if (req.authType === "api_key") {
-    await pool.query(
-      "UPDATE api_keys SET used_this_month = used_this_month + 1 WHERE id = $1",
-      [req.apiKey.id]
-    );
-  } else {
+  // Pour les API keys, l'incrément est déjà fait atomiquement dans apiKeyAuth.
+  // On incrémente uniquement le compteur utilisateur (JWT web).
+  if (req.authType !== "api_key") {
     await pool.query(
       "UPDATE users SET analyses_this_month = analyses_this_month + 1 WHERE id = $1",
       [req.user.id]
@@ -45,9 +40,10 @@ async function incrementUsage(req) {
 
 function getQuotaRemaining(req) {
   if (req.authType === "api_key") {
-    const quota = QUOTAS[req.apiKey.plan] ?? 3;
+    const quota = req.apiKey.monthly_quota ?? QUOTAS[req.apiKey.plan] ?? 3;
     if (quota === -1) return -1;
-    return Math.max(0, quota - req.apiKey.used_this_month - 1);
+    // used_this_month est déjà la valeur post-increment retournée par l'UPDATE atomique
+    return Math.max(0, quota - req.apiKey.used_this_month);
   }
   return null;
 }

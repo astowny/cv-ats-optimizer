@@ -1,4 +1,4 @@
-﻿const crypto = require("crypto");
+const crypto = require("crypto");
 const { pool } = require("../config/database");
 
 const QUOTAS = {
@@ -12,19 +12,6 @@ function hashKey(key) {
   return crypto.createHash("sha256").update(key).digest("hex");
 }
 
-async function checkAndResetMonthly(client, row) {
-  const now = new Date();
-  const last = new Date(row.last_reset_at);
-  if (now.getMonth() !== last.getMonth() || now.getFullYear() !== last.getFullYear()) {
-    await client.query(
-      "UPDATE api_keys SET used_this_month = 0, last_reset_at = NOW() WHERE id = $1",
-      [row.id]
-    );
-    return 0;
-  }
-  return row.used_this_month;
-}
-
 async function apiKeyAuth(req, res, next) {
   const authHeader = req.headers.authorization;
   if (!authHeader || !authHeader.startsWith("Bearer ")) {
@@ -36,32 +23,61 @@ async function apiKeyAuth(req, res, next) {
   }
 
   const keyHash = hashKey(key);
-  const client = await pool.connect();
   try {
-    const { rows } = await client.query(
-      "SELECT * FROM api_keys WHERE key_hash = $1 AND is_active = TRUE",
+    // 1. Vérifier que la clé existe et est active
+    const { rows: found } = await pool.query(
+      "SELECT id, plan, monthly_quota FROM api_keys WHERE key_hash = $1 AND is_active = TRUE",
       [keyHash]
     );
-    if (rows.length === 0) {
+    if (found.length === 0) {
       return res.status(401).json({ error: "Invalid or revoked API key." });
     }
-    const apiKey = rows[0];
-    const currentUsed = await checkAndResetMonthly(client, apiKey);
-    const quota = QUOTAS[apiKey.plan] ?? 3;
-    if (quota !== -1 && currentUsed >= quota) {
+
+    // 2. Incrémenter de façon atomique : reset mensuel + check quota + increment en un seul UPDATE.
+    //    Si le quota est dépassé, aucune ligne n'est mise à jour (0 rows returned).
+    const { rows: updated } = await pool.query(
+      `UPDATE api_keys
+       SET
+         used_this_month = CASE
+           WHEN EXTRACT(YEAR  FROM NOW()) != EXTRACT(YEAR  FROM last_reset_at)
+             OR EXTRACT(MONTH FROM NOW()) != EXTRACT(MONTH FROM last_reset_at)
+           THEN 1
+           ELSE used_this_month + 1
+         END,
+         last_reset_at = CASE
+           WHEN EXTRACT(YEAR  FROM NOW()) != EXTRACT(YEAR  FROM last_reset_at)
+             OR EXTRACT(MONTH FROM NOW()) != EXTRACT(MONTH FROM last_reset_at)
+           THEN NOW()
+           ELSE last_reset_at
+         END
+       WHERE key_hash = $1
+         AND is_active = TRUE
+         AND (
+           plan = 'pay_per_use'
+           OR EXTRACT(YEAR  FROM NOW()) != EXTRACT(YEAR  FROM last_reset_at)
+           OR EXTRACT(MONTH FROM NOW()) != EXTRACT(MONTH FROM last_reset_at)
+           OR used_this_month < monthly_quota
+         )
+       RETURNING id, user_id, name, key_prefix, plan, monthly_quota, used_this_month`,
+      [keyHash]
+    );
+
+    if (updated.length === 0) {
+      const { monthly_quota, plan } = found[0];
       return res.status(429).json({
         error: "Monthly quota exceeded.",
-        used: currentUsed,
-        quota,
-        plan: apiKey.plan,
+        quota: monthly_quota,
+        plan,
         upgrade_url: "https://cv-ats-optimizer.com/pricing"
       });
     }
-    req.apiKey = { ...apiKey, used_this_month: currentUsed };
+
+    req.apiKey = updated[0];
     req.authType = "api_key";
     next();
-  } finally {
-    client.release();
+  } catch (err) {
+    console.error("API key auth error:", err);
+    return res.status(500).json({ error: "Authentication failed." });
   }
 }
 

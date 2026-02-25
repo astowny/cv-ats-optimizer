@@ -1,7 +1,7 @@
-﻿const express = require("express");
+const express = require("express");
 const bcrypt = require("bcryptjs");
 const { pool } = require("../config/database");
-const { generateToken, verifyJwt } = require("../middleware/auth");
+const { generateToken, setAuthCookie, clearAuthCookie, verifyJwt } = require("../middleware/auth");
 const { authLimiter } = require("../middleware/rateLimit");
 
 const router = express.Router();
@@ -49,7 +49,8 @@ router.post("/register", authLimiter, async (req, res) => {
     );
     const user = rows[0];
     const token = generateToken(user);
-    res.status(201).json({ token, user: { id: user.id, email: user.email, plan: user.plan } });
+    setAuthCookie(res, token);
+    res.status(201).json({ user: { id: user.id, email: user.email, plan: user.plan } });
   } catch (err) {
     if (err.code === "23505") return res.status(409).json({ error: "Email already registered." });
     console.error(err);
@@ -93,7 +94,8 @@ router.post("/login", authLimiter, async (req, res) => {
     const valid = await bcrypt.compare(password, user.password_hash);
     if (!valid) return res.status(401).json({ error: "Invalid credentials." });
     const token = generateToken(user);
-    res.json({ token, user: { id: user.id, email: user.email, plan: user.plan } });
+    setAuthCookie(res, token);
+    res.json({ user: { id: user.id, email: user.email, plan: user.plan } });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Login failed." });
@@ -124,6 +126,21 @@ router.get("/me", verifyJwt, async (req, res) => {
     console.error(err);
     res.status(500).json({ error: "Failed to fetch profile." });
   }
+});
+
+/**
+ * @swagger
+ * /v1/auth/logout:
+ *   post:
+ *     summary: Logout and clear the session cookie
+ *     tags: [Auth]
+ *     responses:
+ *       200:
+ *         description: Logged out successfully
+ */
+router.post("/logout", (req, res) => {
+  clearAuthCookie(res);
+  res.json({ message: "Logged out successfully." });
 });
 
 module.exports = router;

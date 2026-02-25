@@ -1,0 +1,50 @@
+
+
+
+
+
+Maintenant j'ai une vue complète du code. Voici un **audit complet** du projet :
+
+---
+
+## ✅ Ce qui est bien fait
+
+| | |
+|---|---|
+| **Sécurité auth** | bcrypt coût 12, SHA-256 pour les API keys, JWT 7j, `email.toLowerCase().trim()` |
+| **Injection SQL** | 100% requêtes paramétrées (`$1`, `$2`...) — aucune concatenation |
+| **Rate limiting** | 3 couches : général (200/15min), auth (20/15min), analyze (15/min) |
+| **Upload PDF** | Taille limitée à 5MB, MIME type vérifié |
+| **CORS** | `*` en dev, URL restreinte en prod via `FRONTEND_URL` |
+| **Docker** | Dockerfile + docker-compose avec healthcheck PostgreSQL |
+| **Quota système** | Reset mensuel automatique, plans distincts |
+| **OpenAI** | `response_format: json_object` + validation du résultat |
+
+---
+
+## ⚠️ Ce qui manque / problèmes
+
+### 🔴 Critique
+- **Pas de Helmet.js** — aucun header de sécurité HTTP (CSP, X-Frame-Options, HSTS, X-Content-Type-Options)
+- **JWT dans localStorage** — vulnérable au XSS ; des httpOnly cookies seraient plus sûrs
+- **Race condition sur les quotas** — le check et l'increment sont deux requêtes séparées, pas atomiques (risque de dépassement sous charge)
+- **Fallback JWT_SECRET dangereux** — `auth.js` ligne 3 a une valeur par défaut si l'env n'est pas définie
+
+### 🟠 Important
+- **Rate limiting in-memory** — ne scale pas horizontalement (plusieurs instances = compteurs indépendants), pas de Redis store
+- **Pas de retry OpenAI** — si l'API OpenAI fail, l'analyse échoue directement, pas de circuit breaker
+- **Swagger exposé en prod** — structure de l'API visible publiquement
+- **Pas de GDPR** — les CVs (données personnelles) sont stockés sans endpoint de suppression
+
+### 🟡 Amélioration
+- **Aucun test** — 0 tests (unitaires, intégration, e2e)
+- **Pas de logging structuré** — que des `console.log/error`, pas de winston/pino
+- **Pas de migration DB** — `CREATE TABLE IF NOT EXISTS` est fragile pour les évolutions de schema
+- **Pas de `.env.example`** — pas de template pour les variables d'environnement requises
+- **Pas de CI/CD** — pas de GitHub Actions
+- **Pas de monitoring** — pas de Sentry, pas de métriques (Prometheus/Datadog)
+- **Pas de graceful shutdown** — pas de gestion `SIGTERM/SIGINT`
+
+---
+
+Tu veux que je corrige certains de ces points ?
