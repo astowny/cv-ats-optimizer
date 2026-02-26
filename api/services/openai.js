@@ -62,6 +62,18 @@ Return a JSON with this exact structure:
   "summary": "<concise overall assessment in 2-3 sentences>"
 }`;
 
+// Délais entre tentatives : 1s, 2s, 4s (backoff exponentiel)
+const RETRY_DELAYS_MS = [1000, 2000, 4000];
+
+function isRetryableError(err) {
+  const status = err?.status ?? err?.response?.status;
+  return status === 429 || (status >= 500 && status < 600);
+}
+
+async function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 async function analyzeCV(cvText, jobDescription, language) {
   const isFr = language === "fr";
   const systemPrompt = isFr ? SYSTEM_PROMPT_FR : SYSTEM_PROMPT_EN;
@@ -69,25 +81,41 @@ async function analyzeCV(cvText, jobDescription, language) {
     ? USER_PROMPT_FR(cvText, jobDescription)
     : USER_PROMPT_EN(cvText, jobDescription);
 
-  const completion = await client.chat.completions.create({
-    model: "gpt-4o-mini",
-    messages: [
-      { role: "system", content: systemPrompt },
-      { role: "user", content: userPrompt }
-    ],
-    response_format: { type: "json_object" },
-    temperature: 0.2,
-    max_tokens: 2000
-  });
+  let lastError;
+  for (let attempt = 0; attempt <= RETRY_DELAYS_MS.length; attempt++) {
+    try {
+      const completion = await client.chat.completions.create({
+        model: "gpt-4o-mini",
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: userPrompt }
+        ],
+        response_format: { type: "json_object" },
+        temperature: 0.2,
+        max_tokens: 2000
+      });
 
-  const result = JSON.parse(completion.choices[0].message.content);
-  const tokensUsed = completion.usage.total_tokens;
+      const result = JSON.parse(completion.choices[0].message.content);
+      const tokensUsed = completion.usage.total_tokens;
 
-  if (typeof result.ats_score !== "number") {
-    throw new Error("Invalid AI response format. Please try again.");
+      if (typeof result.ats_score !== "number") {
+        throw new Error("Invalid AI response format. Please try again.");
+      }
+
+      return { result, tokensUsed };
+    } catch (err) {
+      lastError = err;
+      const hasMoreAttempts = attempt < RETRY_DELAYS_MS.length;
+
+      if (!isRetryableError(err) || !hasMoreAttempts) break;
+
+      const delay = RETRY_DELAYS_MS[attempt];
+      console.warn(`OpenAI attempt ${attempt + 1} failed (status ${err?.status}), retrying in ${delay}ms...`);
+      await sleep(delay);
+    }
   }
 
-  return { result, tokensUsed };
+  throw lastError;
 }
 
 module.exports = { analyzeCV };

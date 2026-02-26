@@ -43,44 +43,41 @@ app.use(express.json({ limit: "1mb" }));
 app.use(express.urlencoded({ extended: true }));
 app.use(generalLimiter);
 
-const swaggerOptions = {
-  definition: {
-    openapi: "3.0.0",
-    info: {
-      title: "CV ATS Optimizer API",
-      version: "1.0.0",
-      description: "API-first CV/ATS optimization tool. Analyze resumes against job descriptions using AI.\n\n## Authentication\nUse `Bearer <token>` with either:\n- A **JWT token** (from /v1/auth/login) for web users\n- An **API key** (`sk-ats-...`) for programmatic access",
-      contact: {
-        name: "API Support",
-        url: "https://github.com/your-username/cv-ats-optimizer"
+if (process.env.NODE_ENV !== "production") {
+  const swaggerOptions = {
+    definition: {
+      openapi: "3.0.0",
+      info: {
+        title: "CV ATS Optimizer API",
+        version: "1.0.0",
+        description: "API-first CV/ATS optimization tool. Analyze resumes against job descriptions using AI.\n\n## Authentication\nUse `Bearer <token>` with either:\n- A **JWT token** (from /v1/auth/login) for web users\n- An **API key** (`sk-ats-...`) for programmatic access",
+        contact: { name: "API Support", url: "https://github.com/your-username/cv-ats-optimizer" },
+        license: { name: "MIT" }
       },
-      license: {
-        name: "MIT"
-      }
-    },
-    servers: [
-      { url: "http://localhost:3001", description: "Development" },
-      { url: "https://api.cv-ats-optimizer.com", description: "Production" }
-    ],
-    components: {
-      securitySchemes: {
-        BearerAuth: {
-          type: "http",
-          scheme: "bearer",
-          bearerFormat: "JWT or API Key",
-          description: "Use a JWT token from /v1/auth/login OR an API key starting with sk-ats-"
+      servers: [
+        { url: "http://localhost:3001", description: "Development" },
+        { url: "https://api.cv-ats-optimizer.com", description: "Production" }
+      ],
+      components: {
+        securitySchemes: {
+          BearerAuth: {
+            type: "http",
+            scheme: "bearer",
+            bearerFormat: "JWT or API Key",
+            description: "Use a JWT token from /v1/auth/login OR an API key starting with sk-ats-"
+          }
         }
       }
-    }
-  },
-  apis: ["./api/routes/*.js"]
-};
-
-const swaggerSpec = swaggerJsdoc(swaggerOptions);
-app.use("/docs", swaggerUi.serve, swaggerUi.setup(swaggerSpec, {
-  customCss: ".swagger-ui .topbar { display: none }",
-  customSiteTitle: "CV ATS Optimizer — API Docs"
-}));
+    },
+    apis: ["./api/routes/*.js"]
+  };
+  const swaggerSpec = swaggerJsdoc(swaggerOptions);
+  app.use("/docs", swaggerUi.serve, swaggerUi.setup(swaggerSpec, {
+    customCss: ".swagger-ui .topbar { display: none }",
+    customSiteTitle: "CV ATS Optimizer — API Docs"
+  }));
+  console.log("API docs available at /docs (development only)");
+}
 
 app.get("/health", (req, res) => {
   res.json({ status: "ok", version: "1.0.0", timestamp: new Date().toISOString() });

@@ -143,4 +143,38 @@ router.post("/logout", (req, res) => {
   res.json({ message: "Logged out successfully." });
 });
 
+/**
+ * @swagger
+ * /v1/auth/account:
+ *   delete:
+ *     summary: Permanently delete your account and all associated data (GDPR)
+ *     tags: [Auth]
+ *     security:
+ *       - BearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Account and all data deleted
+ *       401:
+ *         description: Authentication required
+ */
+router.delete("/account", verifyJwt, async (req, res) => {
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    // Supprimer les analyses (FK ON DELETE SET NULL ne les supprime pas automatiquement)
+    await client.query("DELETE FROM analyses WHERE user_id = $1", [req.user.id]);
+    // Supprimer le compte (cascade sur api_keys via FK ON DELETE CASCADE)
+    await client.query("DELETE FROM users WHERE id = $1", [req.user.id]);
+    await client.query("COMMIT");
+    clearAuthCookie(res);
+    res.json({ message: "Account and all associated data permanently deleted." });
+  } catch (err) {
+    await client.query("ROLLBACK");
+    console.error("Account deletion error:", err);
+    res.status(500).json({ error: "Failed to delete account." });
+  } finally {
+    client.release();
+  }
+});
+
 module.exports = router;
