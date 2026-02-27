@@ -36,19 +36,12 @@ async function checkWebUserQuota(req, res, next) {
 
   try {
     const { rows } = await pool.query(
-      "SELECT plan, trial_ends_at, analyses_this_month, last_reset_at FROM users WHERE id = $1",
+      "SELECT plan, analyses_this_month, last_reset_at FROM users WHERE id = $1",
       [req.user.id]
     );
     if (rows.length === 0) return res.status(401).json({ error: "User not found." });
 
-    let { plan, trial_ends_at, analyses_this_month, last_reset_at } = rows[0];
-
-    // Auto-downgrade trial expiré
-    if (plan === "trial" && trial_ends_at && new Date() > new Date(trial_ends_at)) {
-      plan = "free";
-      await pool.query("UPDATE users SET plan = 'free' WHERE id = $1", [req.user.id]);
-    }
-
+    const { plan, analyses_this_month, last_reset_at } = rows[0];
     const quota = QUOTAS[plan] ?? 3;
 
     if (quota !== -1) {

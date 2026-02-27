@@ -46,15 +46,14 @@ router.post("/register", authLimiter, async (req, res) => {
   }
   try {
     const passwordHash = await bcrypt.hash(password, 12);
-    const trialEndsAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000); // 30 jours
     const { rows } = await pool.query(
-      "INSERT INTO users (email, password_hash, plan, trial_ends_at) VALUES ($1, $2, 'trial', $3) RETURNING id, email, plan, trial_ends_at",
-      [email.toLowerCase().trim(), passwordHash, trialEndsAt]
+      "INSERT INTO users (email, password_hash, plan) VALUES ($1, $2, 'trial') RETURNING id, email, plan",
+      [email.toLowerCase().trim(), passwordHash]
     );
     const user = rows[0];
     const token = generateToken(user);
     setAuthCookie(res, token);
-    res.status(201).json({ user: { id: user.id, email: user.email, plan: user.plan, trial_ends_at: user.trial_ends_at } });
+    res.status(201).json({ user: { id: user.id, email: user.email, plan: user.plan } });
   } catch (err) {
     if (err.code === "23505") return res.status(409).json({ error: "Email already registered." });
     logger.error({ err }, "Registration failed");
@@ -121,19 +120,11 @@ router.post("/login", authLimiter, async (req, res) => {
 router.get("/me", verifyJwt, async (req, res) => {
   try {
     const { rows } = await pool.query(
-      "SELECT id, email, plan, trial_ends_at, analyses_this_month, last_reset_at, created_at FROM users WHERE id = $1",
+      "SELECT id, email, plan, analyses_this_month, last_reset_at, created_at FROM users WHERE id = $1",
       [req.user.id]
     );
     if (rows.length === 0) return res.status(404).json({ error: "User not found." });
-    const user = rows[0];
-
-    // Auto-downgrade si le trial est expiré
-    if (user.plan === "trial" && user.trial_ends_at && new Date() > new Date(user.trial_ends_at)) {
-      await pool.query("UPDATE users SET plan = 'free' WHERE id = $1", [user.id]);
-      user.plan = "free";
-    }
-
-    res.json(user);
+    res.json(rows[0]);
   } catch (err) {
     logger.error({ err }, "Failed to fetch profile");
     res.status(500).json({ error: "Failed to fetch profile." });

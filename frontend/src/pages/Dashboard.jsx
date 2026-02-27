@@ -3,18 +3,6 @@ import { useAuth } from "../contexts/AuthContext";
 import Analyzer from "../components/Analyzer";
 import ApiKeys from "./ApiKeys";
 
-function TrialBanner({ trialEndsAt }) {
-  if (!trialEndsAt) return null;
-  const daysLeft = Math.max(0, Math.ceil((new Date(trialEndsAt) - new Date()) / (1000 * 60 * 60 * 24)));
-  if (daysLeft <= 0) return null;
-  const urgent = daysLeft <= 7;
-  return (
-    <div className={`px-4 py-2 text-sm text-center font-medium ${urgent ? "bg-orange-500 text-white" : "bg-blue-600 text-white"}`}>
-      🎉 Essai gratuit illimité — encore <strong>{daysLeft} jour{daysLeft > 1 ? "s" : ""}</strong>
-      {urgent && " · Passez à un plan payant pour conserver l'accès"}
-    </div>
-  );
-}
 
 function NavLink({ to, icon, label }) {
   const loc = useLocation();
@@ -38,9 +26,7 @@ export default function Dashboard() {
   const { user, logout } = useAuth();
 
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col">
-      {user?.plan === "trial" && <TrialBanner trialEndsAt={user?.trial_ends_at} />}
-      <div className="flex flex-1">
+    <div className="min-h-screen bg-gray-50 flex">
       <aside className="w-60 bg-white border-r border-gray-200 flex flex-col">
         <div className="p-4 border-b border-gray-100">
           <span className="text-lg font-bold"><span className="text-blue-600">CV ATS</span> Optimizer</span>
@@ -62,7 +48,6 @@ export default function Dashboard() {
           <Route path="keys" element={<ApiKeys />} />
         </Routes>
       </main>
-      </div>
     </div>
   );
 }
