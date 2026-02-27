@@ -1,8 +1,10 @@
 const express = require("express");
 const bcrypt = require("bcryptjs");
+const crypto = require("crypto");
 const { pool } = require("../config/database");
 const { generateToken, setAuthCookie, clearAuthCookie, verifyJwt } = require("../middleware/auth");
 const { authLimiter } = require("../middleware/rateLimit");
+const { sendPasswordResetEmail } = require("../services/email");
 const logger = require("../utils/logger");
 
 const router = express.Router();
@@ -175,6 +177,118 @@ router.delete("/account", verifyJwt, async (req, res) => {
     res.status(500).json({ error: "Failed to delete account." });
   } finally {
     client.release();
+  }
+});
+
+/**
+ * @swagger
+ * /v1/auth/forgot-password:
+ *   post:
+ *     summary: Request a password reset email
+ *     tags: [Auth]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [email]
+ *             properties:
+ *               email:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Email sent if account exists (always 200 to avoid enumeration)
+ */
+router.post("/forgot-password", authLimiter, async (req, res) => {
+  const { email } = req.body;
+  if (!email) return res.status(400).json({ error: "Email is required." });
+
+  // Toujours répondre 200 pour ne pas révéler si l'email existe
+  res.json({ message: "Si un compte existe avec cet email, un lien de réinitialisation a été envoyé." });
+
+  try {
+    const { rows } = await pool.query(
+      "SELECT id, email FROM users WHERE email = $1",
+      [email.toLowerCase().trim()]
+    );
+    if (rows.length === 0) return;
+
+    const user = rows[0];
+    const rawToken = crypto.randomBytes(32).toString("hex");
+    const tokenHash = crypto.createHash("sha256").update(rawToken).digest("hex");
+    const expiresAt = new Date(Date.now() + 60 * 60 * 1000); // 1 heure
+
+    // Invalider les anciens tokens
+    await pool.query(
+      "UPDATE password_reset_tokens SET used = TRUE WHERE user_id = $1 AND used = FALSE",
+      [user.id]
+    );
+    await pool.query(
+      "INSERT INTO password_reset_tokens (user_id, token_hash, expires_at) VALUES ($1, $2, $3)",
+      [user.id, tokenHash, expiresAt]
+    );
+
+    const frontendUrl = process.env.FRONTEND_URL?.split(",")[0]?.trim() || "http://localhost:3000";
+    const resetUrl = `${frontendUrl}/reset-password?token=${rawToken}`;
+    await sendPasswordResetEmail(user.email, resetUrl);
+  } catch (err) {
+    logger.error({ err }, "forgot-password error");
+  }
+});
+
+/**
+ * @swagger
+ * /v1/auth/reset-password:
+ *   post:
+ *     summary: Reset password using a token
+ *     tags: [Auth]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [token, password]
+ *             properties:
+ *               token:
+ *                 type: string
+ *               password:
+ *                 type: string
+ *                 minLength: 8
+ *     responses:
+ *       200:
+ *         description: Password reset successfully
+ *       400:
+ *         description: Invalid or expired token
+ */
+router.post("/reset-password", authLimiter, async (req, res) => {
+  const { token, password } = req.body;
+  if (!token || !password) return res.status(400).json({ error: "Token and password are required." });
+  if (password.length < 8) return res.status(400).json({ error: "Password must be at least 8 characters." });
+
+  try {
+    const tokenHash = crypto.createHash("sha256").update(token).digest("hex");
+    const { rows } = await pool.query(
+      `SELECT prt.id, prt.user_id FROM password_reset_tokens prt
+       WHERE prt.token_hash = $1 AND prt.used = FALSE AND prt.expires_at > NOW()`,
+      [tokenHash]
+    );
+    if (rows.length === 0) {
+      return res.status(400).json({ error: "Lien invalide ou expiré. Veuillez faire une nouvelle demande." });
+    }
+
+    const { id: tokenId, user_id } = rows[0];
+    const passwordHash = await bcrypt.hash(password, 12);
+
+    await pool.query("UPDATE users SET password_hash = $1 WHERE id = $2", [passwordHash, user_id]);
+    await pool.query("UPDATE password_reset_tokens SET used = TRUE WHERE id = $1", [tokenId]);
+
+    clearAuthCookie(res);
+    res.json({ message: "Mot de passe réinitialisé avec succès. Vous pouvez maintenant vous connecter." });
+  } catch (err) {
+    logger.error({ err }, "reset-password error");
+    res.status(500).json({ error: "Password reset failed." });
   }
 });
 

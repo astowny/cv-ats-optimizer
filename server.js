@@ -29,10 +29,17 @@ app.use(helmet({
   }
 }));
 
+const allowedOrigins = process.env.NODE_ENV === "production"
+  ? (process.env.FRONTEND_URL || "").split(",").map(o => o.trim()).filter(Boolean)
+  : ["http://localhost:3000", "http://localhost:5173"];
+
 const corsOptions = {
-  origin: process.env.NODE_ENV === "production"
-    ? process.env.FRONTEND_URL
-    : "http://localhost:3000",
+  origin: (origin, callback) => {
+    // Autoriser les requêtes sans origin (curl, Postman, mobile)
+    if (!origin) return callback(null, true);
+    if (allowedOrigins.includes(origin)) return callback(null, true);
+    callback(new Error(`CORS: origin ${origin} not allowed`));
+  },
   credentials: true, // nécessaire pour les cookies httpOnly
   methods: ["GET", "POST", "DELETE", "PUT", "PATCH", "OPTIONS"],
   allowedHeaders: ["Content-Type", "Authorization"]
