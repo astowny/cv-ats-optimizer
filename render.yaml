@@ -1,0 +1,56 @@
+# render.yaml — Infrastructure as Code pour Render (https://render.com)
+# Déploiement : connecter le repo GitHub dans le dashboard Render,
+# il détectera ce fichier automatiquement.
+
+services:
+  - type: web
+    name: cv-ats-optimizer-api
+    runtime: node
+    plan: free
+    region: frankfurt   # le plus proche de la France
+
+    buildCommand: npm install --omit=dev
+    preDeployCommand: node api/scripts/initDb.js
+    startCommand: node server.js
+
+    healthCheckPath: /health
+
+    envVars:
+      - key: NODE_ENV
+        value: production
+
+      # Injectée automatiquement depuis la DB ci-dessous
+      - key: DATABASE_URL
+        fromDatabase:
+          name: cv-ats-optimizer-db
+          property: connectionString
+
+      # Générée automatiquement par Render (valeur aléatoire sécurisée)
+      - key: JWT_SECRET
+        generateValue: true
+
+      # À renseigner manuellement dans le dashboard Render après création
+      - key: OPENAI_API_KEY
+        sync: false
+
+      # URL du frontend Vercel — renseigner après le 1er deploy Vercel
+      # Ex : https://cv-ats-optimizer.vercel.app
+      - key: FRONTEND_URL
+        sync: false
+
+      # Optionnel : Redis Upstash pour rate limiting distribué
+      # https://upstash.com — free tier : 10 000 cmd/jour
+      # - key: REDIS_URL
+      #   sync: false
+
+      - key: LOG_LEVEL
+        value: info
+
+databases:
+  - name: cv-ats-optimizer-db
+    plan: free
+    region: frankfurt
+    # ⚠️  Le plan free Render expire après 90 jours.
+    # Alternative permanente gratuite : Neon (https://neon.tech)
+    # → Créer une DB Neon, copier la connection string dans DATABASE_URL manuellement.
+

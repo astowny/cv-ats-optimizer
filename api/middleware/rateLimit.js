@@ -1,6 +1,7 @@
 const rateLimit = require("express-rate-limit");
 const { RedisStore } = require("rate-limit-redis");
 const Redis = require("ioredis");
+const logger = require("../utils/logger");
 
 // Si REDIS_URL est défini, on utilise Redis (scalable horizontalement).
 // Sinon, fallback sur le store mémoire (ok pour une instance unique).
@@ -8,11 +9,11 @@ let redisClient = null;
 if (process.env.REDIS_URL) {
   redisClient = new Redis(process.env.REDIS_URL, { lazyConnect: true });
   redisClient.on("error", (err) => {
-    console.error("Redis error (rate limiting fallback to memory):", err.message);
+    logger.error({ err: err.message }, "Redis error — rate limiting fallback to memory");
   });
-  console.log("Rate limiting: Redis store enabled");
+  logger.info("Rate limiting: Redis store enabled");
 } else {
-  console.log("Rate limiting: in-memory store (set REDIS_URL to enable Redis)");
+  logger.info("Rate limiting: in-memory store (set REDIS_URL to enable Redis)");
 }
 
 function makeStore(prefix) {

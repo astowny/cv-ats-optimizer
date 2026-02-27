@@ -5,7 +5,7 @@ const cookieParser = require("cookie-parser");
 const helmet = require("helmet");
 const swaggerJsdoc = require("swagger-jsdoc");
 const swaggerUi = require("swagger-ui-express");
-const { initDb } = require("./api/config/database");
+const { initDb, pool } = require("./api/config/database");
 const { generalLimiter } = require("./api/middleware/rateLimit");
 
 const authRoutes = require("./api/routes/auth");
@@ -115,10 +115,33 @@ app.use((err, req, res, next) => {
 async function start() {
   try {
     await initDb();
-    app.listen(PORT, () => {
+    const server = app.listen(PORT, () => {
       console.log(`Server running on http://localhost:${PORT}`);
-      console.log(`API docs: http://localhost:${PORT}/docs`);
+      if (process.env.NODE_ENV !== "production") {
+        console.log(`API docs: http://localhost:${PORT}/docs`);
+      }
     });
+
+    async function shutdown(signal) {
+      console.log(`${signal} received — shutting down gracefully`);
+      server.close(async () => {
+        try {
+          await pool.end();
+          console.log("Database pool closed");
+        } catch (err) {
+          console.error("Error closing database pool:", err);
+        }
+        process.exit(0);
+      });
+      // Force exit si le serveur ne se ferme pas en 10s
+      setTimeout(() => {
+        console.error("Forced shutdown after timeout");
+        process.exit(1);
+      }, 10_000).unref();
+    }
+
+    process.on("SIGTERM", () => shutdown("SIGTERM"));
+    process.on("SIGINT", () => shutdown("SIGINT"));
   } catch (err) {
     console.error("Failed to start server:", err);
     process.exit(1);

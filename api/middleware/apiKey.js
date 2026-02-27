@@ -1,5 +1,6 @@
 const crypto = require("crypto");
 const { pool } = require("../config/database");
+const logger = require("../utils/logger");
 
 const QUOTAS = {
   free: 3,
@@ -76,7 +77,7 @@ async function apiKeyAuth(req, res, next) {
     req.authType = "api_key";
     next();
   } catch (err) {
-    console.error("API key auth error:", err);
+    logger.error({ err }, "API key auth error");
     return res.status(500).json({ error: "Authentication failed." });
   }
 }

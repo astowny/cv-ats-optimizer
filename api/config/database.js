@@ -1,4 +1,5 @@
-﻿const { Pool } = require("pg");
+const { Pool } = require("pg");
+const logger = require("../utils/logger");
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
@@ -46,7 +47,7 @@ async function initDb() {
         created_at TIMESTAMP DEFAULT NOW()
       );
     `);
-    console.log("Database initialized successfully");
+    logger.info("Database initialized successfully");
   } finally {
     client.release();
   }

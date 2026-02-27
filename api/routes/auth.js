@@ -3,6 +3,7 @@ const bcrypt = require("bcryptjs");
 const { pool } = require("../config/database");
 const { generateToken, setAuthCookie, clearAuthCookie, verifyJwt } = require("../middleware/auth");
 const { authLimiter } = require("../middleware/rateLimit");
+const logger = require("../utils/logger");
 
 const router = express.Router();
 
@@ -53,7 +54,7 @@ router.post("/register", authLimiter, async (req, res) => {
     res.status(201).json({ user: { id: user.id, email: user.email, plan: user.plan } });
   } catch (err) {
     if (err.code === "23505") return res.status(409).json({ error: "Email already registered." });
-    console.error(err);
+    logger.error({ err }, "Registration failed");
     res.status(500).json({ error: "Registration failed." });
   }
 });
@@ -97,7 +98,7 @@ router.post("/login", authLimiter, async (req, res) => {
     setAuthCookie(res, token);
     res.json({ user: { id: user.id, email: user.email, plan: user.plan } });
   } catch (err) {
-    console.error(err);
+    logger.error({ err }, "Login failed");
     res.status(500).json({ error: "Login failed." });
   }
 });
@@ -123,7 +124,7 @@ router.get("/me", verifyJwt, async (req, res) => {
     if (rows.length === 0) return res.status(404).json({ error: "User not found." });
     res.json(rows[0]);
   } catch (err) {
-    console.error(err);
+    logger.error({ err }, "Failed to fetch profile");
     res.status(500).json({ error: "Failed to fetch profile." });
   }
 });
