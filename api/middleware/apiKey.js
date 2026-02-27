@@ -4,6 +4,7 @@ const logger = require("../utils/logger");
 
 const QUOTAS = {
   free: 3,
+  trial: -1,       // illimité pendant la période d'essai
   pay_per_use: -1,
   pro: 100,
   business: 1000

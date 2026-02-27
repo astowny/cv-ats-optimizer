@@ -16,7 +16,8 @@ async function initDb() {
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
         email VARCHAR(255) UNIQUE NOT NULL,
         password_hash VARCHAR(255) NOT NULL,
-        plan VARCHAR(20) DEFAULT 'free' CHECK (plan IN ('free', 'pay_per_use', 'pro', 'business')),
+        plan VARCHAR(20) DEFAULT 'trial' CHECK (plan IN ('free', 'trial', 'pay_per_use', 'pro', 'business')),
+        trial_ends_at TIMESTAMP,
         analyses_this_month INTEGER DEFAULT 0,
         last_reset_at TIMESTAMP DEFAULT NOW(),
         created_at TIMESTAMP DEFAULT NOW()
@@ -56,6 +57,20 @@ async function initDb() {
         created_at TIMESTAMP DEFAULT NOW()
       );
     `);
+    // Migration: ajouter trial_ends_at si la colonne n'existe pas (bases existantes)
+    await client.query(`
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS trial_ends_at TIMESTAMP;
+
+      DO $$
+      BEGIN
+        -- Mettre à jour le CHECK constraint pour inclure 'trial'
+        ALTER TABLE users DROP CONSTRAINT IF EXISTS users_plan_check;
+        ALTER TABLE users ADD CONSTRAINT users_plan_check
+          CHECK (plan IN ('free', 'trial', 'pay_per_use', 'pro', 'business'));
+      EXCEPTION WHEN OTHERS THEN NULL;
+      END$$;
+    `);
+
     logger.info("Database initialized successfully");
   } finally {
     client.release();

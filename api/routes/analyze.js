@@ -27,6 +27,58 @@ async function flexAuth(req, res, next) {
   return verifyJwt(req, res, next);
 }
 
+/**
+ * Vérifie et applique le quota pour les utilisateurs web (JWT).
+ * Les API keys ont leur propre quota atomique dans apiKeyAuth.
+ */
+async function checkWebUserQuota(req, res, next) {
+  if (req.authType === "api_key") return next(); // déjà géré
+
+  try {
+    const { rows } = await pool.query(
+      "SELECT plan, trial_ends_at, analyses_this_month, last_reset_at FROM users WHERE id = $1",
+      [req.user.id]
+    );
+    if (rows.length === 0) return res.status(401).json({ error: "User not found." });
+
+    let { plan, trial_ends_at, analyses_this_month, last_reset_at } = rows[0];
+
+    // Auto-downgrade trial expiré
+    if (plan === "trial" && trial_ends_at && new Date() > new Date(trial_ends_at)) {
+      plan = "free";
+      await pool.query("UPDATE users SET plan = 'free' WHERE id = $1", [req.user.id]);
+    }
+
+    const quota = QUOTAS[plan] ?? 3;
+
+    if (quota !== -1) {
+      // Reset mensuel
+      const now = new Date();
+      const lastReset = new Date(last_reset_at);
+      let usedThisMonth = analyses_this_month;
+      if (now.getFullYear() !== lastReset.getFullYear() || now.getMonth() !== lastReset.getMonth()) {
+        usedThisMonth = 0;
+        await pool.query("UPDATE users SET analyses_this_month = 0, last_reset_at = NOW() WHERE id = $1", [req.user.id]);
+      }
+
+      if (usedThisMonth >= quota) {
+        return res.status(429).json({
+          error: "Quota mensuel atteint.",
+          quota,
+          plan,
+          upgrade_url: `${process.env.FRONTEND_URL?.split(",")[0]?.trim() || ""}/pricing`
+        });
+      }
+    }
+
+    req.webUserPlan = plan;
+    next();
+  } catch (err) {
+    console.error("Quota check error:", err);
+    res.status(500).json({ error: "Authentication failed." });
+  }
+}
+
 async function incrementUsage(req) {
   // Pour les API keys, l'incrément est déjà fait atomiquement dans apiKeyAuth.
   // On incrémente uniquement le compteur utilisateur (JWT web).
@@ -100,7 +152,7 @@ function getQuotaRemaining(req) {
  *       429:
  *         description: Quota exceeded or rate limit
  */
-router.post("/", analyzeLimiter, flexAuth, upload.single("cv_file"), async (req, res) => {
+router.post("/", analyzeLimiter, flexAuth, checkWebUserQuota, upload.single("cv_file"), async (req, res) => {
   try {
     let cvText = req.body.cv_text || "";
     const jobDescription = req.body.job_description || "";
