@@ -10,8 +10,7 @@ services:
     region: frankfurt   # le plus proche de la France
 
     buildCommand: npm install --omit=dev
-    preDeployCommand: node api/scripts/initDb.js
-    startCommand: node server.js
+    startCommand: node api/scripts/initDb.js && node server.js
 
     healthCheckPath: /health
 
