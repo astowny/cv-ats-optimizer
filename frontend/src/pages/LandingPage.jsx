@@ -80,7 +80,7 @@ export default function LandingPage() {
             <div><span className="text-blue-400">curl</span> -X POST https://api.cv-ats-optimizer.com/v1/analyze \</div>
             <div className="ml-4"><span className="text-yellow-400">-H</span> <span className="text-green-400">"Authorization: Bearer sk-ats-YOUR_KEY"</span> \</div>
             <div className="ml-4"><span className="text-yellow-400">-H</span> <span className="text-green-400">"Content-Type: application/json"</span> \</div>
-            <div className="ml-4"><span className="text-yellow-400">-d</span> <span className="text-green-400">'{"cv_text":"...","job_description":"...","language":"fr"}'</span></div>
+            <div className="ml-4"><span className="text-yellow-400">-d</span> <span className="text-green-400">{'\'{"cv_text":"...","job_description":"...","language":"fr"}\''}</span></div>
           </div>
           <div className="text-center mt-6">
             <Link to="/docs" className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700">Voir la documentation complete</Link>
