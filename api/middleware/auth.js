@@ -16,10 +16,15 @@ function generateToken(user) {
   );
 }
 
+// sameSite: "none" est requis car le frontend (vercel.app) et le backend (onrender.com)
+// sont sur des domaines différents (cross-site). "strict" bloque l'envoi du cookie.
+// secure: true est obligatoire avec sameSite "none" (HTTPS uniquement).
+const isProduction = process.env.NODE_ENV === "production";
+
 const COOKIE_OPTIONS = {
   httpOnly: true,
-  secure: process.env.NODE_ENV === "production",
-  sameSite: "strict",
+  secure: isProduction,
+  sameSite: isProduction ? "none" : "lax",
   maxAge: 7 * 24 * 60 * 60 * 1000 // 7 jours en ms
 };
 
@@ -28,7 +33,11 @@ function setAuthCookie(res, token) {
 }
 
 function clearAuthCookie(res) {
-  res.clearCookie(COOKIE_NAME, { httpOnly: true, secure: COOKIE_OPTIONS.secure, sameSite: "strict" });
+  res.clearCookie(COOKIE_NAME, {
+    httpOnly: true,
+    secure: COOKIE_OPTIONS.secure,
+    sameSite: COOKIE_OPTIONS.sameSite
+  });
 }
 
 function verifyJwt(req, res, next) {
