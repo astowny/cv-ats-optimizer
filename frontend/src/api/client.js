@@ -6,10 +6,14 @@ const api = axios.create({
   withCredentials: true // envoie le cookie httpOnly auth_token automatiquement
 });
 
+const PUBLIC_PATHS = ["/login", "/forgot-password", "/reset-password"];
+
 api.interceptors.response.use(
   (res) => res,
   (err) => {
-    if (err.response?.status === 401) {
+    const isPublicPage = PUBLIC_PATHS.some((p) => window.location.pathname.startsWith(p));
+    // Ne rediriger vers /login que depuis une page protégée (pas depuis /login lui-même → boucle infinie)
+    if (err.response?.status === 401 && !isPublicPage) {
       window.location.href = "/login";
     }
     return Promise.reject(err);
