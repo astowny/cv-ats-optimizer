@@ -1,11 +1,13 @@
-﻿const pdfParse = require("pdf-parse");
+﻿// pdf-parse v2.x exporte via .default (ESM interop)
+const _pdfParse = require("pdf-parse");
+const pdfParse = typeof _pdfParse === "function" ? _pdfParse : _pdfParse.default;
 
 async function extractTextFromPdf(buffer) {
   try {
     const data = await pdfParse(buffer);
     const text = data.text.trim();
     if (!text || text.length < 50) {
-      throw new Error("No readable text found in PDF. The file may be image-based or scanned. Please paste the CV text manually.");
+      throw new Error("Aucun texte lisible trouvé dans le PDF. Le fichier est peut-être scanné ou en image. Veuillez coller le texte du CV manuellement.");
     }
     return text;
   } catch (err) {
