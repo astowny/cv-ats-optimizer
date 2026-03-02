@@ -39,7 +39,7 @@ async function checkWebUserQuota(req, res, next) {
       "SELECT plan, analyses_this_month, last_reset_at FROM users WHERE id = $1",
       [req.user.id]
     );
-    if (rows.length === 0) return res.status(401).json({ error: "User not found." });
+    if (rows.length === 0) return res.status(401).json({ error: "Utilisateur introuvable." });
 
     const { plan, analyses_this_month, last_reset_at } = rows[0];
     const quota = QUOTAS[plan] ?? 3;
@@ -68,7 +68,7 @@ async function checkWebUserQuota(req, res, next) {
     next();
   } catch (err) {
     console.error("Quota check error:", err);
-    res.status(500).json({ error: "Authentication failed." });
+    res.status(500).json({ error: "L'authentification a échoué." });
   }
 }
 
@@ -152,7 +152,7 @@ router.post("/", analyzeLimiter, flexAuth, checkWebUserQuota, upload.single("cv_
     const language = req.body.language || "fr";
 
     if (!["fr", "en"].includes(language)) {
-      return res.status(400).json({ error: "Language must be 'fr' or 'en'." });
+      return res.status(400).json({ error: "La langue doit être 'fr' ou 'en'." });
     }
 
     if (req.file) {
@@ -164,10 +164,10 @@ router.post("/", analyzeLimiter, flexAuth, checkWebUserQuota, upload.single("cv_
     }
 
     if (!cvText || cvText.trim().length < 100) {
-      return res.status(400).json({ error: "CV text must be at least 100 characters. Upload a PDF or paste the text." });
+      return res.status(400).json({ error: "Le CV doit contenir au moins 100 caractères. Importez un PDF ou collez le texte." });
     }
     if (!jobDescription || jobDescription.trim().length < 50) {
-      return res.status(400).json({ error: "Job description must be at least 50 characters." });
+      return res.status(400).json({ error: "La description du poste doit contenir au moins 50 caractères." });
     }
 
     const { result, tokensUsed } = await analyzeCV(cvText.trim(), jobDescription.trim(), language);
@@ -199,7 +199,7 @@ router.post("/", analyzeLimiter, flexAuth, checkWebUserQuota, upload.single("cv_
     });
   } catch (err) {
     console.error("Analyze error:", err);
-    res.status(500).json({ error: "Analysis failed. Please try again." });
+    res.status(500).json({ error: "L'analyse a échoué. Veuillez réessayer." });
   }
 });
 
@@ -228,7 +228,7 @@ router.get("/history", verifyJwt, async (req, res) => {
     res.json(rows);
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: "Failed to fetch history." });
+    res.status(500).json({ error: "Impossible de récupérer l'historique." });
   }
 });
 

@@ -17,11 +17,11 @@ function hashKey(key) {
 async function apiKeyAuth(req, res, next) {
   const authHeader = req.headers.authorization;
   if (!authHeader || !authHeader.startsWith("Bearer ")) {
-    return res.status(401).json({ error: "Authorization header required. Format: Bearer sk-ats-..." });
+    return res.status(401).json({ error: "En-tête d'autorisation requis. Format : Bearer sk-ats-..." });
   }
   const key = authHeader.substring(7);
   if (!key.startsWith("sk-ats-")) {
-    return res.status(401).json({ error: "Invalid API key format. Keys must start with sk-ats-" });
+    return res.status(401).json({ error: "Format de clé API invalide. Les clés doivent commencer par sk-ats-" });
   }
 
   const keyHash = hashKey(key);
@@ -32,7 +32,7 @@ async function apiKeyAuth(req, res, next) {
       [keyHash]
     );
     if (found.length === 0) {
-      return res.status(401).json({ error: "Invalid or revoked API key." });
+      return res.status(401).json({ error: "Clé API invalide ou révoquée." });
     }
 
     // 2. Incrémenter de façon atomique : reset mensuel + check quota + increment en un seul UPDATE.
@@ -67,7 +67,7 @@ async function apiKeyAuth(req, res, next) {
     if (updated.length === 0) {
       const { monthly_quota, plan } = found[0];
       return res.status(429).json({
-        error: "Monthly quota exceeded.",
+        error: "Quota mensuel dépassé.",
         quota: monthly_quota,
         plan,
         upgrade_url: "https://cv-ats-optimizer.com/pricing"
@@ -79,7 +79,7 @@ async function apiKeyAuth(req, res, next) {
     next();
   } catch (err) {
     logger.error({ err }, "API key auth error");
-    return res.status(500).json({ error: "Authentication failed." });
+    return res.status(500).json({ error: "L'authentification a échoué." });
   }
 }
 

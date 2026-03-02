@@ -39,10 +39,10 @@ const router = express.Router();
 router.post("/register", authLimiter, async (req, res) => {
   const { email, password } = req.body;
   if (!email || !password) {
-    return res.status(400).json({ error: "Email and password are required." });
+    return res.status(400).json({ error: "L'email et le mot de passe sont requis." });
   }
   if (password.length < 8) {
-    return res.status(400).json({ error: "Password must be at least 8 characters." });
+    return res.status(400).json({ error: "Le mot de passe doit contenir au moins 8 caractères." });
   }
   try {
     const passwordHash = await bcrypt.hash(password, 12);
@@ -55,9 +55,9 @@ router.post("/register", authLimiter, async (req, res) => {
     setAuthCookie(res, token);
     res.status(201).json({ user: { id: user.id, email: user.email, plan: user.plan } });
   } catch (err) {
-    if (err.code === "23505") return res.status(409).json({ error: "Email already registered." });
+    if (err.code === "23505") return res.status(409).json({ error: "Cet email est déjà utilisé." });
     logger.error({ err }, "Registration failed");
-    res.status(500).json({ error: "Registration failed." });
+    res.status(500).json({ error: "L'inscription a échoué. Veuillez réessayer." });
   }
 });
 
@@ -88,20 +88,20 @@ router.post("/register", authLimiter, async (req, res) => {
 router.post("/login", authLimiter, async (req, res) => {
   const { email, password } = req.body;
   if (!email || !password) {
-    return res.status(400).json({ error: "Email and password are required." });
+    return res.status(400).json({ error: "L'email et le mot de passe sont requis." });
   }
   try {
     const { rows } = await pool.query("SELECT * FROM users WHERE email = $1", [email.toLowerCase().trim()]);
-    if (rows.length === 0) return res.status(401).json({ error: "Invalid credentials." });
+    if (rows.length === 0) return res.status(401).json({ error: "Identifiants invalides." });
     const user = rows[0];
     const valid = await bcrypt.compare(password, user.password_hash);
-    if (!valid) return res.status(401).json({ error: "Invalid credentials." });
+    if (!valid) return res.status(401).json({ error: "Identifiants invalides." });
     const token = generateToken(user);
     setAuthCookie(res, token);
     res.json({ user: { id: user.id, email: user.email, plan: user.plan } });
   } catch (err) {
     logger.error({ err }, "Login failed");
-    res.status(500).json({ error: "Login failed." });
+    res.status(500).json({ error: "La connexion a échoué. Veuillez réessayer." });
   }
 });
 
@@ -123,11 +123,11 @@ router.get("/me", verifyJwt, async (req, res) => {
       "SELECT id, email, plan, analyses_this_month, last_reset_at, created_at FROM users WHERE id = $1",
       [req.user.id]
     );
-    if (rows.length === 0) return res.status(404).json({ error: "User not found." });
+    if (rows.length === 0) return res.status(404).json({ error: "Utilisateur introuvable." });
     res.json(rows[0]);
   } catch (err) {
     logger.error({ err }, "Failed to fetch profile");
-    res.status(500).json({ error: "Failed to fetch profile." });
+    res.status(500).json({ error: "Impossible de récupérer le profil." });
   }
 });
 
@@ -174,7 +174,7 @@ router.delete("/account", verifyJwt, async (req, res) => {
   } catch (err) {
     await client.query("ROLLBACK");
     console.error("Account deletion error:", err);
-    res.status(500).json({ error: "Failed to delete account." });
+    res.status(500).json({ error: "La suppression du compte a échoué." });
   } finally {
     client.release();
   }
@@ -202,7 +202,7 @@ router.delete("/account", verifyJwt, async (req, res) => {
  */
 router.post("/forgot-password", authLimiter, async (req, res) => {
   const { email } = req.body;
-  if (!email) return res.status(400).json({ error: "Email is required." });
+  if (!email) return res.status(400).json({ error: "L'email est requis." });
 
   // Toujours répondre 200 pour ne pas révéler si l'email existe
   res.json({ message: "Si un compte existe avec cet email, un lien de réinitialisation a été envoyé." });
@@ -264,8 +264,8 @@ router.post("/forgot-password", authLimiter, async (req, res) => {
  */
 router.post("/reset-password", authLimiter, async (req, res) => {
   const { token, password } = req.body;
-  if (!token || !password) return res.status(400).json({ error: "Token and password are required." });
-  if (password.length < 8) return res.status(400).json({ error: "Password must be at least 8 characters." });
+  if (!token || !password) return res.status(400).json({ error: "Le token et le mot de passe sont requis." });
+  if (password.length < 8) return res.status(400).json({ error: "Le mot de passe doit contenir au moins 8 caractères." });
 
   try {
     const tokenHash = crypto.createHash("sha256").update(token).digest("hex");
@@ -288,7 +288,7 @@ router.post("/reset-password", authLimiter, async (req, res) => {
     res.json({ message: "Mot de passe réinitialisé avec succès. Vous pouvez maintenant vous connecter." });
   } catch (err) {
     logger.error({ err }, "reset-password error");
-    res.status(500).json({ error: "Password reset failed." });
+    res.status(500).json({ error: "La réinitialisation du mot de passe a échoué." });
   }
 });
 

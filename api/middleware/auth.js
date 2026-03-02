@@ -34,14 +34,14 @@ function clearAuthCookie(res) {
 function verifyJwt(req, res, next) {
   const token = req.cookies?.[COOKIE_NAME];
   if (!token) {
-    return res.status(401).json({ error: "Authentication required. Please login." });
+    return res.status(401).json({ error: "Authentification requise. Veuillez vous connecter." });
   }
   try {
     const decoded = jwt.verify(token, JWT_SECRET);
     req.user = decoded;
     next();
   } catch (err) {
-    return res.status(401).json({ error: "Invalid or expired token. Please login again." });
+    return res.status(401).json({ error: "Session invalide ou expirée. Veuillez vous reconnecter." });
   }
 }
 
