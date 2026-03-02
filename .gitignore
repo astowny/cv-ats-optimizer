@@ -13,6 +13,7 @@ npm-debug.log*
 
 # Frontend build
 frontend/build/
+frontend/dist/
 frontend/.env
 
 # OS
