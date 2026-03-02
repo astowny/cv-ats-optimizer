@@ -1,6 +1,5 @@
-﻿// pdf-parse v2.x exporte via .default (ESM interop)
-const _pdfParse = require("pdf-parse");
-const pdfParse = typeof _pdfParse === "function" ? _pdfParse : _pdfParse.default;
+﻿// Importer directement le fichier lib pour éviter les problèmes d'interop ESM/CJS de pdf-parse v2
+const pdfParse = require("pdf-parse/lib/pdf-parse.js");
 
 async function extractTextFromPdf(buffer) {
   try {
